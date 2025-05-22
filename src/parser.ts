@@ -39,19 +39,21 @@ export async function parseCurrentFile(parser: Parser): Promise<{ tree: Parser.T
                 const functionNameNode = cursor.currentNode.childForFieldName('name');
                 console.log(`Function name node: ${functionNameNode?.type}, Text: ${functionNameNode?.text}`);
                 let functionName = functionNameNode?.text || 'anonymous';
-
-                // Fallback: Traverse children if functionNameNode is null
-                if (!functionNameNode) {
-                    for (const child of cursor.currentNode.namedChildren) {
-                        if (child.type === 'identifier') { // Assuming 'identifier' is the type for function names
-                            console.log(`Fallback function name found: ${child.text}`);
-                            functionName = child.text;
-                            break;
+                
+                if (functionName !== 'anonymous') {
+                    // Fallback: Traverse children if functionNameNode is null
+                    if (!functionNameNode) {
+                        for (const child of cursor.currentNode.namedChildren) {
+                            if (child.type === 'identifier') { // Assuming 'identifier' is the type for function names
+                                console.log(`Fallback function name found: ${child.text}`);
+                                functionName = child.text;
+                                break;
+                            }
                         }
                     }
-                }
 
-                functions.push(functionName);
+                    functions.push(functionName);
+                }
             }
         } while (cursor.gotoNextSibling());
     } else {
@@ -70,12 +72,12 @@ function logSyntaxTree(node: Parser.SyntaxNode, depth: number = 0): void {
     }
 }
 
-export async function parseAndSimulateMemory(parser: Parser): Promise<void> {
+export async function parseAndSimulateMemory(parser: Parser): Promise<{ stack: { functionName: string; variables: string[] }[]; heap: string[] }> {
     const { tree, functions } = await parseCurrentFile(parser);
 
     if (!tree) {
         vscode.window.showErrorMessage('Failed to parse the code for memory simulation.');
-        return;
+        return { stack: [], heap: [] };
     }
 
     console.log('Full syntax tree:');
@@ -165,8 +167,6 @@ export async function parseAndSimulateMemory(parser: Parser): Promise<void> {
 
     traverseNode(tree.rootNode);
 
-    // Display simulated memory model
-    vscode.window.showInformationMessage(
-        `Stack: ${JSON.stringify(stack, null, 2)}\nHeap: ${JSON.stringify(heap, null, 2)}`
-    );
+    // Return simulated memory model
+    return { stack, heap };
 }

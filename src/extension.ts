@@ -31,22 +31,16 @@ export function activate(context: vscode.ExtensionContext) {
 		console.log('Webview panel created'); // Debug log
 
 		// Set the HTML content for the Webview
-		const webviewPath = vscode.Uri.file(
-			path.join(context.extensionPath, 'webview', 'index.html')
-		);
-		const webviewUri = panel.webview.asWebviewUri(webviewPath);
+		const fs = require('fs');
+		const webviewPath = path.join(context.extensionPath, 'webview', 'index.html');
+		const webviewContent = fs.readFileSync(webviewPath, 'utf8');
 
-		panel.webview.html = `<!DOCTYPE html>
-		<html>
-		<head>
-			<meta charset="UTF-8">
-			<meta name="viewport" content="width=device-width, initial-scale=1.0">
-			<title>Memory Layout Visualizer</title>
-		</head>
-		<body>
-			<iframe src="${webviewUri}" style="width:100%; height:100%; border:none;"></iframe>
-		</body>
-		</html>`;
+		// Resolve the path to styles.css using vscode.Uri
+		const stylesPath = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'webview', 'styles.css'));
+		// Replace the placeholder in the HTML content with the resolved path
+		const updatedWebviewContent = webviewContent.replace('<link rel="stylesheet" href="styles.css">', `<link rel="stylesheet" href="${stylesPath}">`);
+
+		panel.webview.html = updatedWebviewContent;
 
 		console.log('Webview content set'); // Debug log
 
@@ -54,8 +48,21 @@ export function activate(context: vscode.ExtensionContext) {
 		const parser = await initializeParser(context.extensionPath);
 		const memoryModel = await parseAndSimulateMemory(parser);
 
-		// Send the memory model to the Webview
-		panel.webview.postMessage({ type: 'memoryModel', data: memoryModel });
+		// Add debug logs to verify data flow
+		console.log('Memory model data to send:', memoryModel);
+
+		// Ensure Webview is fully loaded before sending the message
+		panel.webview.onDidReceiveMessage((message) => {
+			// Add debug log to confirm message reception
+			console.log('Message received in extension:', message);
+			if (message.command === 'ready') {
+				console.log('Webview is ready to receive messages.');
+				// Add detailed debug logs to verify data sent
+				console.log('Memory model data to send (detailed):', JSON.stringify(memoryModel, null, 2));
+				panel.webview.postMessage({ type: 'memoryModel', data: memoryModel });
+				console.log('Memory model data sent to Webview (detailed).');
+			}
+		});
 
 		// Handle messages from the Webview
 		panel.webview.onDidReceiveMessage((message) => {

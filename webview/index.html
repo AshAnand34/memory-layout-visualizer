@@ -4,29 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Memory Layout Visualizer</title>
-    <!-- Content Security Policy -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self';">
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-        }
-        #visualization {
-            width: 100%;
-            height: 100vh;
-        }
-        #stack, #heap {
-            float: left;
-            width: 50%;
-            height: 100%;
-            overflow-y: auto;
-        }
-        #stack {
-            border-right: 1px solid black;
-        }
-    </style>
+    <!-- Content Security Policy with nonce -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://d3js.org 'nonce-abc123'; style-src 'self' vscode-resource:;">
+    <script src="https://d3js.org/d3.v7.min.js" nonce="abc123"></script>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <h1>Memory Layout Visualizer</h1>
@@ -40,18 +21,17 @@
             <ul id="heap-list"></ul>
         </div>
     </div>
-    <script>
-        // Placeholder for D3.js rendering logic
-        const svg = d3.select("#visualization")
-            .append("svg")
-            .attr("width", "100%")
-            .attr("height", "100%");
+    <script nonce="abc123">
+        console.log('Webview script is running.');
 
-        svg.append("text")
-            .attr("x", 50)
-            .attr("y", 50)
-            .text("Memory Layout Visualization Placeholder")
-            .style("font-size", "20px");
+        // Ensure vscode object is available
+        let vscode;
+        try {
+            vscode = acquireVsCodeApi();
+            console.log('vscode object acquired successfully.');
+        } catch (error) {
+            console.error('Failed to acquire vscode object:', error);
+        }
 
         // Function to render stack and heap data
         function renderMemoryLayout(stack, heap) {
@@ -72,14 +52,30 @@
             });
         }
 
-        // Example usage (replace with actual data from extension)
-        renderMemoryLayout(
-            [
-                { functionName: "exampleFunction", variables: ["localVariable", "heapVariable"] },
-                { functionName: "main", variables: [] }
-            ],
-            ["malloc(sizeof(int))"]
-        );
+        // Confirm that the message listener is active
+        console.log('Webview message listener is active.');
+        window.addEventListener('message', (event) => {
+            const message = event.data;
+            // Add detailed debug logs to verify message reception
+            console.log('Message received in Webview (detailed):', JSON.stringify(message, null, 2));
+            if (message.type === 'memoryModel') {
+                // Add detailed debug logs to verify message processing
+                console.log('Rendering memory model with data (detailed):', JSON.stringify(message.data, null, 2));
+                const { stack, heap } = message.data;
+                console.log('Rendering memory layout with stack:', stack, 'and heap:', heap);
+                renderMemoryLayout(stack, heap);
+            }
+        });
+
+        // Notify the extension that the Webview is ready
+        if (vscode) {
+            window.addEventListener('load', () => {
+                console.log('Webview loaded. Sending ready message to extension.');
+                vscode.postMessage({ command: 'ready' });
+            });
+        } else {
+            console.error('vscode object is not available. Cannot send ready message.');
+        }
     </script>
 </body>
 </html>
