@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Layout Visualizer</title>
+    <!-- Content Security Policy -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self';">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        #visualization {
+            width: 100%;
+            height: 100vh;
+        }
+        #stack, #heap {
+            float: left;
+            width: 50%;
+            height: 100%;
+            overflow-y: auto;
+        }
+        #stack {
+            border-right: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <h1>Memory Layout Visualizer</h1>
+    <div id="visualization">
+        <div id="stack">
+            <h2>Stack</h2>
+            <ul id="stack-list"></ul>
+        </div>
+        <div id="heap">
+            <h2>Heap</h2>
+            <ul id="heap-list"></ul>
+        </div>
+    </div>
+    <script>
+        // Placeholder for D3.js rendering logic
+        const svg = d3.select("#visualization")
+            .append("svg")
+            .attr("width", "100%")
+            .attr("height", "100%");
+
+        svg.append("text")
+            .attr("x", 50)
+            .attr("y", 50)
+            .text("Memory Layout Visualization Placeholder")
+            .style("font-size", "20px");
+
+        // Function to render stack and heap data
+        function renderMemoryLayout(stack, heap) {
+            const stackList = d3.select("#stack-list");
+            stackList.selectAll("li").remove();
+            stack.forEach(frame => {
+                const frameItem = stackList.append("li").text(frame.functionName);
+                const variablesList = frameItem.append("ul");
+                frame.variables.forEach(variable => {
+                    variablesList.append("li").text(variable);
+                });
+            });
+
+            const heapList = d3.select("#heap-list");
+            heapList.selectAll("li").remove();
+            heap.forEach(allocation => {
+                heapList.append("li").text(allocation);
+            });
+        }
+
+        // Example usage (replace with actual data from extension)
+        renderMemoryLayout(
+            [
+                { functionName: "exampleFunction", variables: ["localVariable", "heapVariable"] },
+                { functionName: "main", variables: [] }
+            ],
+            ["malloc(sizeof(int))"]
+        );
+    </script>
+</body>
+</html>

@@ -1,4 +1,5 @@
 const esbuild = require("esbuild");
+const nodeExternals = require('esbuild-plugin-node-externals').default; // Ensure correct import of the plugin
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
@@ -35,12 +36,16 @@ async function main() {
 		sourcesContent: false,
 		platform: 'node',
 		outfile: 'dist/extension.js',
-		external: ['vscode'],
+		external: ['vscode', '*.node', 'node-gyp-build'], // Ensure .node files and node-gyp-build are external
 		logLevel: 'silent',
 		plugins: [
 			/* add to the end of plugins array */
 			esbuildProblemMatcherPlugin,
+			nodeExternals() // Ensure the plugin is invoked as a function
 		],
+		loader: {
+			'.node': 'file' // Add loader for .node files
+		}
 	});
 	if (watch) {
 		await ctx.watch();

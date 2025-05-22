@@ -1,6 +1,8 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import * as path from 'path';
+import { initializeParser, parseAndSimulateMemory } from './parser';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -13,7 +15,7 @@ export function activate(context: vscode.ExtensionContext) {
 	// The command has been defined in the package.json file
 	// Now provide the implementation of the command with registerCommand
 	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('memory-layout-visualizer.openMemoryVisualizer', () => {
+	const disposable = vscode.commands.registerCommand('memory-layout-visualizer.openMemoryVisualizer', async () => {
 		console.log('Command executed: Open Memory Visualizer'); // Debug log
 
 		// Create and show a new Webview panel
@@ -21,14 +23,48 @@ export function activate(context: vscode.ExtensionContext) {
 			'memoryLayoutVisualizer', // Identifies the type of the webview. Used internally
 			'Memory Layout Visualizer', // Title of the panel displayed to the user
 			vscode.ViewColumn.Beside, // Editor column to show the new webview panel in the side
-			{} // Webview options. More on these later.
+			{
+				enableScripts: true, // Allow scripts to run in the Webview
+			}
 		);
 
 		console.log('Webview panel created'); // Debug log
 
 		// Set the HTML content for the Webview
-		panel.webview.html = getWebviewContent();
+		const webviewPath = vscode.Uri.file(
+			path.join(context.extensionPath, 'webview', 'index.html')
+		);
+		const webviewUri = panel.webview.asWebviewUri(webviewPath);
+
+		panel.webview.html = `<!DOCTYPE html>
+		<html>
+		<head>
+			<meta charset="UTF-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+			<title>Memory Layout Visualizer</title>
+		</head>
+		<body>
+			<iframe src="${webviewUri}" style="width:100%; height:100%; border:none;"></iframe>
+		</body>
+		</html>`;
+
 		console.log('Webview content set'); // Debug log
+
+		// Initialize the parser and simulate memory
+		const parser = await initializeParser(context.extensionPath);
+		const memoryModel = await parseAndSimulateMemory(parser);
+
+		// Send the memory model to the Webview
+		panel.webview.postMessage({ type: 'memoryModel', data: memoryModel });
+
+		// Handle messages from the Webview
+		panel.webview.onDidReceiveMessage((message) => {
+			switch (message.command) {
+				case 'alert':
+					vscode.window.showInformationMessage(message.text);
+					break;
+			}
+		});
 	});
 
 	context.subscriptions.push(disposable);
@@ -56,23 +92,6 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Add the status bar item to subscriptions
 	context.subscriptions.push(statusBarItem);
-
-	// Function to provide HTML content for the Webview
-	function getWebviewContent(): string {
-		return `<!DOCTYPE html>
-		<html lang="en">
-		<head>
-			<meta charset="UTF-8">
-			<meta name="viewport" content="width=device-width, initial-scale=1.0">
-			<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src vscode-resource: https:; script-src 'self'; style-src 'self' vscode-resource:;">
-			<title>Memory Layout Visualizer</title>
-		</head>
-		<body>
-			<h1>Welcome to the Memory Layout Visualizer</h1>
-			<p>This is where the memory layout visualization will appear.</p>
-		</body>
-		</html>`;
-	}
 }
 
 // This method is called when your extension is deactivated
