@@ -2,7 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { initializeParser, parseAndSimulateMemory } from './parser';
+import { estimateTypeSizes, initializeParser, parseAndSimulateMemory } from './parser';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -46,21 +46,26 @@ export function activate(context: vscode.ExtensionContext) {
 
 		// Initialize the parser and simulate memory
 		const parser = await initializeParser(context.extensionPath);
-		const memoryModel = await parseAndSimulateMemory(parser);
+		let memoryModel = await parseAndSimulateMemory(parser);
+		let typeSizes = await estimateTypeSizes(parser);
 
-		// Add debug logs to verify data flow
-		console.log('Memory model data to send:', memoryModel);
+		// Combine memoryModel and typeSizes into a single object
+		const combinedModel = {
+			...memoryModel,
+			typeSizes: typeSizes
+		};
 
-		// Ensure Webview is fully loaded before sending the message
+		// Add debug logs to verify combined data, including `reference`
+		console.log('Combined memory model with references:', JSON.stringify(combinedModel, null, 2));
+
+		// Ensure Webview is fully loaded before sending the combined message
 		panel.webview.onDidReceiveMessage((message) => {
-			// Add debug log to confirm message reception
 			console.log('Message received in extension:', message);
 			if (message.command === 'ready') {
 				console.log('Webview is ready to receive messages.');
-				// Add detailed debug logs to verify data sent
-				console.log('Memory model data to send (detailed):', JSON.stringify(memoryModel, null, 2));
-				panel.webview.postMessage({ type: 'memoryModel', data: memoryModel });
-				console.log('Memory model data sent to Webview (detailed).');
+				console.log('Combined data to send (detailed):', JSON.stringify(combinedModel, null, 2));
+				panel.webview.postMessage({ type: 'memoryModel', data: combinedModel });
+				console.log('Combined data sent to Webview (detailed).');
 			}
 		});
 
@@ -70,6 +75,53 @@ export function activate(context: vscode.ExtensionContext) {
 				case 'alert':
 					vscode.window.showInformationMessage(message.text);
 					break;
+			}
+		});
+
+		// Listen for active editor changes and update the Webview
+		vscode.window.onDidChangeActiveTextEditor(async (editor) => {
+			if (editor && ['c', 'cpp', 'rust'].includes(editor.document.languageId)) {
+				const parser = await initializeParser(context.extensionPath);
+				memoryModel = await parseAndSimulateMemory(parser);
+
+				// Combine memoryModel and typeSizes into a single object
+				const combinedModel = {
+					...memoryModel,
+					typeSizes: typeSizes,
+					globals: memoryModel.globals // Ensure globals are included
+				};
+
+				// Add debug logs to verify data flow
+				console.log('Memory model data to send on editor change:', combinedModel);
+
+				if (panel.webview) {
+					panel.webview.postMessage({ type: 'memoryModel', data: combinedModel });
+					console.log('Memory model data sent to Webview on editor change.');
+				}
+			}
+		});
+
+		// Listen for document changes and update the Webview
+		vscode.workspace.onDidChangeTextDocument(async (event) => {
+			const editor = vscode.window.activeTextEditor;
+			if (editor && event.document === editor.document && ['c', 'cpp', 'rust'].includes(editor.document.languageId)) {
+				const parser = await initializeParser(context.extensionPath);
+				memoryModel = await parseAndSimulateMemory(parser);
+
+				// Combine memoryModel and typeSizes into a single object
+				const combinedModel = {
+					...memoryModel,
+					typeSizes: typeSizes,
+					globals: memoryModel.globals // Ensure globals are included
+				};
+
+				// Add debug logs to verify data flow
+				console.log('Memory model data to send on document change:', combinedModel);
+
+				if (panel.webview) {
+					panel.webview.postMessage({ type: 'memoryModel', data: combinedModel });
+					console.log('Memory model data sent to Webview on document change.');
+				}
 			}
 		});
 	});

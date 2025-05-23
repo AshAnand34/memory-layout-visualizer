@@ -13,12 +13,13 @@
     <h1>Memory Layout Visualizer</h1>
     <div id="visualization">
         <div id="stack">
-            <h2>Stack</h2>
             <ul id="stack-list"></ul>
         </div>
         <div id="heap">
-            <h2>Heap</h2>
             <ul id="heap-list"></ul>
+        </div>
+        <div id="svg-container">
+            <svg id="arrow-svg"></svg>
         </div>
     </div>
     <script nonce="abc123">
@@ -34,22 +35,130 @@
         }
 
         // Function to render stack and heap data
-        function renderMemoryLayout(stack, heap) {
-            const stackList = d3.select("#stack-list");
-            stackList.selectAll("li").remove();
-            stack.forEach(frame => {
-                const frameItem = stackList.append("li").text(frame.functionName);
-                const variablesList = frameItem.append("ul");
-                frame.variables.forEach(variable => {
-                    variablesList.append("li").text(variable);
+        function renderMemoryLayout(stack, heap, globals, typeSizes) {
+            const stackContainer = document.getElementById('stack');
+            const heapContainer = document.getElementById('heap');
+            const svg = d3.select('#arrow-svg')
+                .attr('width', '100%')
+                .attr('height', 500);
+
+            // Ensure Stack and Heap titles are visible
+            stackContainer.innerHTML = '<h2>Stack</h2>';
+            heapContainer.innerHTML = '<h2>Heap</h2>';
+
+            const stackPositions = {};
+            const heapPositions = {};
+
+            stack.forEach((frame, frameIndex) => {
+                const frameDiv = document.createElement('div');
+                frameDiv.className = 'stack-frame';
+                frameDiv.innerHTML = `<h3>${frame.functionName}</h3>`;
+
+                frame.variables.forEach((variable, variableIndex) => {
+                    const variableDiv = document.createElement('div');
+                    const height = (typeSizes[variable.type] || 8) * 10;
+                    variableDiv.className = 'stack-variable';
+                    variableDiv.style.height = `${height}px`;
+                    variableDiv.innerHTML = `${variable.name} (${variable.type}) = ${variable.value}`;
+                    frameDiv.appendChild(variableDiv);
+
+                    // Store position for arrow drawing
+                    stackPositions[variable.name] = {
+                        x: 150,
+                        y: frameIndex * 100 + variableIndex * 30 + 20
+                    };
                 });
+
+                stackContainer.appendChild(frameDiv);
             });
 
-            const heapList = d3.select("#heap-list");
-            heapList.selectAll("li").remove();
-            heap.forEach(allocation => {
-                heapList.append("li").text(allocation);
+            heap.forEach((allocation, allocationIndex) => {
+                const allocationDiv = document.createElement('div');
+                const height = typeSizes[allocation.type] || 20;
+                allocationDiv.className = 'heap-allocation';
+                allocationDiv.style.height = `${height}px`;
+                allocationDiv.innerHTML = `${allocation.name} (${allocation.type}) = ${allocation.value}`;
+                heapContainer.appendChild(allocationDiv);
+
+                // Store position for arrow drawing
+                heapPositions[allocation.name] = {
+                    x: 450,
+                    y: allocationIndex * 50 + 20
+                };
             });
+
+            // Render global/static variables
+            const globalsContainer = document.createElement('div');
+            globalsContainer.id = 'globals';
+            globalsContainer.innerHTML = '<h2>Globals</h2>';
+
+            globals.forEach(globalVar => {
+                const globalDiv = document.createElement('div');
+                globalDiv.className = 'global-variable';
+                globalDiv.innerHTML = `${globalVar.name} (${globalVar.type}) = ${globalVar.value}`;
+                globalsContainer.appendChild(globalDiv);
+            });
+
+            document.getElementById('visualization').appendChild(globalsContainer);
+
+            // Draw arrows between stack variables and heap allocations
+            // Debugging: Log stack and heap positions
+            console.log('Stack positions:', stackPositions);
+            console.log('Heap positions:', heapPositions);
+
+            // Debugging: Log variable names in stack and heap
+            console.log('Variable names in stackPositions:', Object.keys(stackPositions));
+            console.log('Variable names in heapPositions:', Object.keys(heapPositions));
+
+            // Debugging: Log stack variables with references
+            console.log('Stack variables with references:', stack.flatMap(frame => frame.variables).filter(variable => variable.reference));
+
+            Object.keys(stackPositions).forEach(variableName => {
+                const stackPos = stackPositions[variableName];
+
+                // Use the `reference` property to find the corresponding heap allocation
+                const stackVariable = stack.flatMap(frame => frame.variables).find(variable => variable.name === variableName);
+                const heapPos = stackVariable?.reference ? heapPositions[stackVariable.reference] : undefined;
+
+                if (!heapPos) {
+                    console.warn(`No matching heap allocation found for stack variable: ${variableName} with reference: ${stackVariable?.reference}`);
+                }
+
+                if (stackPos && heapPos) {
+                    console.log(`Drawing arrow for ${variableName} with reference ${stackVariable.reference}:`, {
+                        x1: stackPos.x,
+                        y1: stackPos.y,
+                        x2: heapPos.x,
+                        y2: heapPos.y
+                    });
+
+                    svg.append('line')
+                        .attr('x1', stackPos.x)
+                        .attr('y1', stackPos.y)
+                        .attr('x2', heapPos.x)
+                        .attr('y2', heapPos.y)
+                        .attr('stroke', 'white')
+                        .attr('stroke-width', 2)
+                        .attr('marker-end', 'url(#arrowhead)');
+                }
+            });
+
+            // Add arrowhead marker
+            svg.append('defs')
+                .append('marker')
+                .attr('id', 'arrowhead')
+                .attr('viewBox', '0 0 10 10')
+                .attr('refX', 10)
+                .attr('refY', 5)
+                .attr('markerWidth', 6)
+                .attr('markerHeight', 6)
+                .attr('orient', 'auto')
+                .append('path')
+                .attr('d', 'M 0 0 L 10 5 L 0 10 Z')
+                .attr('fill', 'white');
+
+            // Debugging: Log SVG content
+            console.log('SVG content:', svg.node().outerHTML);
         }
 
         // Confirm that the message listener is active
@@ -61,9 +170,9 @@
             if (message.type === 'memoryModel') {
                 // Add detailed debug logs to verify message processing
                 console.log('Rendering memory model with data (detailed):', JSON.stringify(message.data, null, 2));
-                const { stack, heap } = message.data;
+                const { stack, heap, globals, typeSizes } = message.data;
                 console.log('Rendering memory layout with stack:', stack, 'and heap:', heap);
-                renderMemoryLayout(stack, heap);
+                renderMemoryLayout(stack, heap, globals, typeSizes);
             }
         });
 
